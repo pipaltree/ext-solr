@@ -29,6 +29,8 @@ use TYPO3\CMS\Extbase\Mvc\Exception\StopActionException;
 use TYPO3\CMS\Extbase\Mvc\Request;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Extbase\Service\EnvironmentService;
+use TYPO3\TestingFramework\Core\Functional\Framework\Frontend\InternalRequest;
 use TYPO3Fluid\Fluid\View\Exception\InvalidTemplateResourceException;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 
@@ -93,14 +95,32 @@ class SearchControllerTest extends AbstractFrontendControllerTest
      */
     public function canShowSearchForm()
     {
-        $this->markTestSkipped('Blocked by: https://github.com/TYPO3-Solr/ext-solr/issues/3091 " [TASK-11.5C] Refactor Widgets to TYPO3s new Pagination API"');
         $this->importDataSetFromFixture('can_render_search_controller.xml');
-        $GLOBALS['TSFE'] = $this->getConfiguredTSFE(1);
+        $this->addTypoScriptToTemplateRecord(
+            1,
+            '
+            page.20 = USER
+            page.20 {
+              userFunc = TYPO3\CMS\Extbase\Core\Bootstrap->run
+              extensionName = Solr
+              pluginName = pi_results
+              vendorName = ApacheSolrForTypo3
+              controller = Search
+              action = results
+              view < plugin.tx_solr.view
+              persistence < plugin.tx_solr.persistence
+              settings < plugin.tx_solr.settings
+            }
+            '
+        );
+        //$GLOBALS['TSFE'] = $this->getConfiguredTSFE(1);
 
         $this->indexPages([1, 2]);
 
-        $this->searchController->processRequest($this->searchRequest);
-        $content = $this->searchResponse->getBody()->getContents();
+        $response = $this->executeFrontendSubRequest($this->searchRequest);
+
+        //$this->searchController->processRequest($this->searchRequest);
+        $content = (string)$response->getBody();
         $this->assertStringContainsString('id="tx-solr-search-form-pi-results"', $content, 'Response did not contain search css selector');
     }
 
@@ -110,7 +130,6 @@ class SearchControllerTest extends AbstractFrontendControllerTest
      */
     public function canSearchForPrices()
     {
-        $this->markTestSkipped('Blocked by: https://github.com/TYPO3-Solr/ext-solr/issues/3091 " [TASK-11.5C] Refactor Widgets to TYPO3s new Pagination API"');
         $_GET['q'] = 'prices';
         $this->importDataSetFromFixture('can_render_search_controller.xml');
         $GLOBALS['TSFE'] = $this->getConfiguredTSFE(1);
@@ -1218,16 +1237,16 @@ class SearchControllerTest extends AbstractFrontendControllerTest
      */
     protected function fakeSingletonsForFrontendContext()
     {
-//        $environmentServiceMock = $this->getMockBuilder(EnvironmentService::class)->setMethods([])->disableOriginalConstructor()->getMock();
-//        $environmentServiceMock->expects($this->any())->method('isEnvironmentInFrontendMode')->willReturn(true);
-//        $environmentServiceMock->expects($this->any())->method('isEnvironmentInBackendMode')->willReturn(false);
+        $environmentServiceMock = $this->getMockBuilder(EnvironmentService::class)->setMethods([])->disableOriginalConstructor()->getMock();
+        $environmentServiceMock->expects($this->any())->method('isEnvironmentInFrontendMode')->willReturn(true);
+        $environmentServiceMock->expects($this->any())->method('isEnvironmentInBackendMode')->willReturn(false);
 
         $configurationManagerMock = $this->getMockBuilder(ExtbaseConfigurationManager::class)->onlyMethods(['getContentObject'])
             ->setConstructorArgs([$this->getContainer()])->getMock();
 
         $configurationManagerMock->expects($this->any())->method('getContentObject')->willReturn(GeneralUtility::makeInstance(ContentObjectRenderer::class));
 
-//        GeneralUtility::setSingletonInstance(EnvironmentService::class, $environmentServiceMock);
+        GeneralUtility::setSingletonInstance(EnvironmentService::class, $environmentServiceMock);
         GeneralUtility::setSingletonInstance(ExtbaseConfigurationManager::class, $configurationManagerMock);
     }
 }
